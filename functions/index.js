@@ -8,6 +8,80 @@ const GEMINI_KEY = defineSecret("GEMINI_KEY");
 const ASSEMBLYAI_BASE = "https://api.assemblyai.com/v2";
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
+// ── #2 Validate Gemini response structure ──────────────────────────────────
+function validateGeminiResponse(parsed, validLineIds) {
+  const errors = [];
+
+  // 1. Required top-level fields
+  if (typeof parsed.driftDetected !== "boolean") {
+    errors.push("driftDetected must be boolean");
+  }
+  if (typeof parsed.commercialTerm !== "string") {
+    errors.push("commercialTerm must be string");
+  }
+  if (typeof parsed.explanation !== "string") {
+    errors.push("explanation must be string");
+  }
+  if (typeof parsed.clarifyingQuestion !== "string") {
+    errors.push("clarifyingQuestion must be string");
+  }
+  if (!Array.isArray(parsed.evidence)) {
+    errors.push("evidence must be array");
+  }
+  if (!Array.isArray(parsed.agreementItems)) {
+    errors.push("agreementItems must be array");
+  }
+
+  // 2. If drift detected, extra fields are required
+  if (parsed.driftDetected) {
+    if (!parsed.earlierEvidence) errors.push("earlierEvidence missing");
+    if (!parsed.laterEvidence) errors.push("laterEvidence missing");
+    if (!parsed.stateChange) errors.push("stateChange missing");
+    if (!parsed.missingEvidence) errors.push("missingEvidence missing");
+
+    // 3. Validate evidence line IDs exist in actual transcript
+    if (Array.isArray(parsed.evidence)) {
+      parsed.evidence.forEach((e, i) => {
+        if (!e.lineId) {
+          errors.push(`evidence[${i}] missing lineId`);
+        } else if (!validLineIds.has(e.lineId)) {
+          errors.push(`evidence[${i}] lineId "${e.lineId}" not found in transcript`);
+        }
+        if (!e.quote) errors.push(`evidence[${i}] missing quote`);
+        if (!e.stateLabel) errors.push(`evidence[${i}] missing stateLabel`);
+        if (!e.timestamp) errors.push(`evidence[${i}] missing timestamp`);
+        if (!e.speaker) errors.push(`evidence[${i}] missing speaker`);
+      });
+    }
+
+    // 4. Validate earlierEvidence and laterEvidence line IDs
+    if (parsed.earlierEvidence && !validLineIds.has(parsed.earlierEvidence)) {
+      errors.push(`earlierEvidence "${parsed.earlierEvidence}" not found in transcript`);
+    }
+    if (parsed.laterEvidence && !validLineIds.has(parsed.laterEvidence)) {
+      errors.push(`laterEvidence "${parsed.laterEvidence}" not found in transcript`);
+    }
+  }
+
+  return errors;
+}
+
+// ── #2 Safe defaults for missing/null fields ───────────────────────────────
+function applyDefaults(parsed) {
+  return {
+    driftDetected: parsed.driftDetected ?? false,
+    commercialTerm: parsed.commercialTerm ?? "",
+    explanation: parsed.explanation ?? "",
+    clarifyingQuestion: parsed.clarifyingQuestion ?? "",
+    earlierEvidence: parsed.earlierEvidence ?? "",
+    laterEvidence: parsed.laterEvidence ?? "",
+    stateChange: parsed.stateChange ?? "",
+    missingEvidence: parsed.missingEvidence ?? "",
+    evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
+    agreementItems: Array.isArray(parsed.agreementItems) ? parsed.agreementItems : [],
+  };
+}
+
 exports.transcribeAudio = onRequest(
     {secrets: [ASSEMBLYAI_KEY], cors: true, timeoutSeconds: 300},
     async (req, res) => {
@@ -87,12 +161,17 @@ exports.analyzeDrift = onRequest(
           return res.status(400).json({error: "Missing transcript array"});
         }
 
+        // Build line IDs and transcript text
+        const lineIdMap = new Map();
         const transcriptText = transcript
-    .map((line, index) => {
-      const lineId = `L${String(index + 1).padStart(3, "0")}`;
-      return `${lineId} | ${line.time} | ${line.speaker}: ${line.text}`;
-    })
-    .join("\n");
+            .map((line, index) => {
+              const lineId = `L${String(index + 1).padStart(3, "0")}`;
+              lineIdMap.set(lineId, true);
+              return `${lineId} | ${line.time} | ${line.speaker}: ${line.text}`;
+            })
+            .join("\n");
+
+        const validLineIds = new Set(lineIdMap.keys());
 
         const prompt = `
 You are PromiseGuard, a commitment tracking system for B2B sales calls.
@@ -111,37 +190,30 @@ INSTRUCTIONS:
 - Do NOT accuse intent — only report language and evidence state changes
 - Base ALL values, quotes, timestamps, and line IDs on the ACTUAL transcript — never invent data
 - Every evidence item MUST reference the exact LINE_ID from the transcript
+- LINE_IDs must exist in the transcript above — never invent a line ID
 
 Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation outside the JSON.
 
 JSON shape:
 {
   "driftDetected": <true or false>,
-  "commercialTerm": "<the commercial term that drifted>",
-  "explanation": "<why this was flagged, based on actual transcript content>",
-  "clarifyingQuestion": "<a question to resolve the ambiguity>",
+  "commercialTerm": "<the commercial term that drifted, empty string if none>",
+  "explanation": "<why this was flagged, based on actual transcript content, empty string if none>",
+  "clarifyingQuestion": "<a question to resolve the ambiguity, empty string if none>",
+  "earlierEvidence": "<lineId of first mention e.g. L014, empty string if driftDetected is false>",
+  "laterEvidence": "<lineId of last mention e.g. L042, empty string if driftDetected is false>",
+  "stateChange": "<e.g. TENTATIVE → APPARENT_COMMITMENT, empty string if driftDetected is false>",
+  "missingEvidence": "<what confirmation is missing, empty string if driftDetected is false>",
   "evidence": [
     {
-      "lineId": "<e.g. L014>",
+      "lineId": "<exact LINE_ID from transcript>",
       "timestamp": "<mm:ss from actual transcript>",
       "speaker": "<speaker name>",
       "quote": "<exact quote from actual transcript>",
-      "stateLabel": "TENTATIVE",
-      "commercialTerm": "<actual term>"
-    },
-    {
-      "lineId": "<e.g. L042>",
-      "timestamp": "<mm:ss from actual transcript>",
-      "speaker": "<speaker name>",
-      "quote": "<exact quote from actual transcript>",
-      "stateLabel": "COMMITTED",
+      "stateLabel": "<TENTATIVE | ESTIMATE | COMMITTED | APPARENT_COMMITMENT | CUSTOMER_ASSUMPTION_OF_COMMITMENT>",
       "commercialTerm": "<actual term>"
     }
   ],
-  "earlierEvidence": "<lineId of first mention e.g. L014>",
-  "laterEvidence": "<lineId of last mention e.g. L042>",
-  "stateChange": "<e.g. TENTATIVE → APPARENT_COMMITMENT>",
-  "missingEvidence": "<what confirmation is missing>",
   "agreementItems": [
     {
       "item": "<actual item name>",
@@ -153,7 +225,7 @@ JSON shape:
   ]
 }
 
-If no drift is detected, return driftDetected as false with empty arrays.
+If no drift is detected, return driftDetected as false and empty arrays for evidence and agreementItems.
 `;
 
         const geminiResponse = await fetch(`${GEMINI_BASE}?key=${apiKey}`, {
@@ -161,7 +233,10 @@ If no drift is detected, return driftDetected as false with empty arrays.
           headers: {"content-type": "application/json"},
           body: JSON.stringify({
             contents: [{parts: [{text: prompt}]}],
-            generationConfig: {temperature: 0.1},
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: "application/json",
+            },
           }),
         });
 
@@ -174,9 +249,40 @@ If no drift is detected, return driftDetected as false with empty arrays.
 
         const rawText = geminiData.candidates[0].content.parts[0].text;
         const cleaned = rawText.replace(/```json|```/g, "").trim();
-        const parsed = JSON.parse(cleaned);
 
-        return res.status(200).json(parsed);
+        let parsed;
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch (parseErr) {
+          logger.error("Gemini JSON parse failed", rawText);
+          return res.status(500).json({error: "Gemini returned invalid JSON"});
+        }
+
+        // Apply safe defaults
+        const safe = applyDefaults(parsed);
+
+        // Validate structure and line IDs
+        const validationErrors = validateGeminiResponse(safe, validLineIds);
+        if (validationErrors.length > 0) {
+          logger.warn("Gemini response validation warnings", validationErrors);
+          // We still return the response but log the issues
+          // Filter out evidence with invalid line IDs
+          safe.evidence = safe.evidence.filter((e) => {
+            if (!e.lineId || !validLineIds.has(e.lineId)) {
+              logger.warn(`Removing evidence with invalid lineId: ${e.lineId}`);
+              return false;
+            }
+            return true;
+          });
+        }
+
+        logger.info("analyzeDrift success", {
+          driftDetected: safe.driftDetected,
+          evidenceCount: safe.evidence.length,
+          validationErrors,
+        });
+
+        return res.status(200).json(safe);
       } catch (err) {
         logger.error("analyzeDrift error", err);
         return res.status(500).json({error: err.message});
