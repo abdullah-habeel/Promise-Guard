@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:promise_guard/core/route/app_route.dart';
 import 'package:promise_guard/features/agreement_record/model/agreement_item_model.dart';
+import 'package:promise_guard/features/agreement_record/model/commitment_timeline_model.dart';
 import 'package:promise_guard/features/drift_alert/model/drift_evidence_model.dart';
 import 'package:promise_guard/features/transcript/model/transcript_line_model.dart';
 import '../service/drift_service.dart';
@@ -12,6 +13,7 @@ class DriftAlertController extends GetxController {
       : _service = service ?? DriftService();
 
   final RxBool isLoading = true.obs;
+  final RxList<CommitmentTimelineEntry> commitmentTimeline = <CommitmentTimelineEntry>[].obs;
   final RxBool hasError = false.obs;
   final RxString errorMessage = ''.obs;
   final RxBool driftDetected = false.obs;
@@ -68,6 +70,10 @@ class DriftAlertController extends GetxController {
       stateChange.value = data['stateChange'] as String? ?? '';
       missingEvidence.value = data['missingEvidence'] as String? ?? '';
       evidence.assignAll(_service.parseEvidence(data));
+      final timeline = data['commitmentTimeline'] as List<dynamic>? ?? [];
+commitmentTimeline.assignAll(
+  timeline.map((e) => CommitmentTimelineEntry.fromJson(e as Map<String, dynamic>)),
+);
 
       final items = data['agreementItems'] as List<dynamic>? ?? [];
       agreementItems.assignAll(

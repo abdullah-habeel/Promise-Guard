@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:promise_guard/features/agreement_record/model/commitment_timeline_model.dart';
 import '../controller/drift_alert_controller.dart';
 import '../model/drift_evidence_model.dart';
 
@@ -204,10 +205,13 @@ class DriftAlertScreen extends StatelessWidget {
                   const SizedBox(height: 16),
 
                   // Evidence cards
-                  // Evidence cards
-                  ...controller.evidence.map((e) => _EvidenceCard(evidence: e)),
+                  // Commitment timeline
+                  if (controller.commitmentTimeline.isNotEmpty)
+                    _CommitmentTimeline(entries: controller.commitmentTimeline),
                   const SizedBox(height: 8),
 
+                  // Evidence cards
+                  ...controller.evidence.map((e) => _EvidenceCard(evidence: e)),
                   // State change trail
                   if (controller.stateChange.value.isNotEmpty)
                     Container(
@@ -596,6 +600,187 @@ class _EvidenceCard extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommitmentTimeline extends StatelessWidget {
+  final List<CommitmentTimelineEntry> entries;
+
+  const _CommitmentTimeline({required this.entries});
+
+  Color _stateColor(String state) {
+    switch (state) {
+      case 'TENTATIVE':
+        return const Color(0xFFF59E0B);
+      case 'ESTIMATE':
+        return const Color(0xFF3B82F6);
+      case 'APPARENT_COMMITMENT':
+        return const Color(0xFFDC2626);
+      case 'CUSTOMER_ASSUMPTION_OF_COMMITMENT':
+        return const Color(0xFF7C3AED);
+      case 'COMMITTED':
+        return const Color(0xFF16A34A);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Commitment Timeline',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1B4F72),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...entries.asMap().entries.map((entry) {
+            final i = entry.key;
+            final e = entry.value;
+            final isLast = i == entries.length - 1;
+            final color = _stateColor(e.state);
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: color, width: 2),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${i + 1}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (!isLast)
+                      Container(
+                        width: 2,
+                        height: 48,
+                        color: const Color(0xFFE5E7EB),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1B4F72),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                e.lineId,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              e.timestamp,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              '·',
+                              style: TextStyle(color: Color(0xFF6B7280)),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              e.speaker,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1B4F72),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: color),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            e.state,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '"${e.quote}"',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4B5563),
+                            fontStyle: FontStyle.italic,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
         ],
       ),
     );

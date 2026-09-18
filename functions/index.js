@@ -77,6 +77,7 @@ function applyDefaults(parsed) {
     laterEvidence: parsed.laterEvidence ?? "",
     stateChange: parsed.stateChange ?? "",
     missingEvidence: parsed.missingEvidence ?? "",
+    commitmentTimeline: Array.isArray(parsed.commitmentTimeline) ? parsed.commitmentTimeline : [],
     evidence: Array.isArray(parsed.evidence) ? parsed.evidence : [],
     agreementItems: Array.isArray(parsed.agreementItems) ? parsed.agreementItems : [],
   };
@@ -176,56 +177,77 @@ exports.analyzeDrift = onRequest(
         const prompt = `
 You are PromiseGuard, a commitment tracking system for B2B sales calls.
 
-Analyze this sales call transcript and detect promise drift — when a commitment moves from tentative to treated-as-confirmed without explicit reconfirmation.
+COMMITMENT STATE MODEL:
+Every commercial commitment passes through these states in order:
+1. TENTATIVE     — "I think", "probably", "roughly", "I'd say"
+2. ESTIMATE      — "around", "approximately", numbers given without commitment
+3. APPARENT_COMMITMENT — treated as agreed without explicit confirmation
+4. CUSTOMER_ASSUMPTION_OF_COMMITMENT — customer acts as if it is confirmed
+5. COMMITTED     — explicit mutual confirmation on record
+
+DRIFT RULE:
+Drift occurs when the SAME commercial term moves from state 1-2 to state 3-5
+WITHOUT an explicit reconfirmation between those two points.
+
+MISSING CONFIRMATION RULE:
+After identifying drift, scan ALL lines between earlierEvidence and laterEvidence.
+If no line contains explicit mutual confirmation of the term, set missingEvidence
+to describe exactly what is absent.
+If a confirmation exists, set missingEvidence to empty string and driftDetected to false.
 
 TRANSCRIPT:
 ${transcriptText}
 
 Each line is formatted as: LINE_ID | TIMESTAMP | SPEAKER: TEXT
 
-INSTRUCTIONS:
-- Look for commitment-relevant statements about: Price, Delivery, Scope, Support
-- Classify each statement as: TENTATIVE, ESTIMATE, or COMMITTED
-- Flag drift when the same commercial term escalates in state without explicit reconfirmation
-- Do NOT accuse intent — only report language and evidence state changes
-- Base ALL values, quotes, timestamps, and line IDs on the ACTUAL transcript — never invent data
-- Every evidence item MUST reference the exact LINE_ID from the transcript
-- LINE_IDs must exist in the transcript above — never invent a line ID
+STRICT RULES:
+- Only use LINE_IDs that exist in the transcript above
+- Only quote text that appears verbatim in the transcript
+- Never invent data, timestamps, speakers, or line IDs
+- Every evidence item MUST have a lineId from the transcript
+- stateLabel MUST be one of: TENTATIVE, ESTIMATE, APPARENT_COMMITMENT, CUSTOMER_ASSUMPTION_OF_COMMITMENT, COMMITTED
+- If no drift detected, return driftDetected false and empty arrays
 
-Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation outside the JSON.
+Respond ONLY with valid JSON. No markdown, no backticks, no text outside JSON.
 
-JSON shape:
 {
   "driftDetected": <true or false>,
   "commercialTerm": "<the commercial term that drifted, empty string if none>",
-  "explanation": "<why this was flagged, based on actual transcript content, empty string if none>",
-  "clarifyingQuestion": "<a question to resolve the ambiguity, empty string if none>",
-  "earlierEvidence": "<lineId of first mention e.g. L014, empty string if driftDetected is false>",
-  "laterEvidence": "<lineId of last mention e.g. L042, empty string if driftDetected is false>",
-  "stateChange": "<e.g. TENTATIVE → APPARENT_COMMITMENT, empty string if driftDetected is false>",
-  "missingEvidence": "<what confirmation is missing, empty string if driftDetected is false>",
+  "explanation": "<why flagged based on actual transcript, empty string if none>",
+  "clarifyingQuestion": "<question to resolve ambiguity, empty string if none>",
+  "earlierEvidence": "<lineId of first tentative mention, empty string if none>",
+  "laterEvidence": "<lineId of assumption or apparent commitment, empty string if none>",
+  "stateChange": "<e.g. TENTATIVE → APPARENT_COMMITMENT, empty string if none>",
+  "missingEvidence": "<what explicit confirmation is missing, empty string if none>",
+  "commitmentTimeline": [
+    {
+      "lineId": "<exact LINE_ID>",
+      "timestamp": "<mm:ss>",
+      "speaker": "<speaker>",
+      "state": "<one of the 5 states above>",
+      "quote": "<exact quote>"
+    }
+  ],
   "evidence": [
     {
-      "lineId": "<exact LINE_ID from transcript>",
-      "timestamp": "<mm:ss from actual transcript>",
-      "speaker": "<speaker name>",
-      "quote": "<exact quote from actual transcript>",
-      "stateLabel": "<TENTATIVE | ESTIMATE | COMMITTED | APPARENT_COMMITMENT | CUSTOMER_ASSUMPTION_OF_COMMITMENT>",
+      "lineId": "<exact LINE_ID>",
+      "timestamp": "<mm:ss>",
+      "speaker": "<speaker>",
+      "quote": "<exact quote>",
+      "stateLabel": "<one of the 5 states>",
       "commercialTerm": "<actual term>"
     }
   ],
   "agreementItems": [
     {
-      "item": "<actual item name>",
-      "value": "<actual value from transcript>",
-      "lineId": "<lineId where this was stated>",
-      "evidence": "<mm:ss timestamp>",
-      "participants": "<speakers involved>"
+      "item": "<actual item>",
+      "value": "<actual value>",
+      "lineId": "<lineId>",
+      "evidence": "<mm:ss>",
+      "participants": "<speakers>"
     }
   ]
 }
-
-If no drift is detected, return driftDetected as false and empty arrays for evidence and agreementItems.
 `;
 
         const geminiResponse = await fetch(`${GEMINI_BASE}?key=${apiKey}`, {
