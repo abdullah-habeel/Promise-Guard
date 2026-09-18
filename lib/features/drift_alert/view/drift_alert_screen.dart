@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:promise_guard/core/config/commitment_state.dart';
 import 'package:promise_guard/features/agreement_record/model/commitment_timeline_model.dart';
 import '../controller/drift_alert_controller.dart';
 import '../model/drift_evidence_model.dart';
@@ -494,20 +495,23 @@ class _EvidenceCard extends StatelessWidget {
   const _EvidenceCard({required this.evidence});
 
   Color get _stateColor {
-    switch (evidence.stateLabel) {
-      case 'TENTATIVE':
-        return const Color(0xFFF59E0B);
-      case 'ESTIMATE':
-        return const Color(0xFF3B82F6);
-      case 'COMMITTED':
-        return const Color(0xFFDC2626);
-      default:
-        return const Color(0xFF6B7280);
-    }
+  switch (evidence.state) {
+    case CommitmentState.tentative:
+      return const Color(0xFFF59E0B);
+    case CommitmentState.conditional:
+      return const Color(0xFF3B82F6);
+    case CommitmentState.apparentCommitment:
+      return const Color(0xFFDC2626);
+    case CommitmentState.confirmed:
+      return const Color(0xFF16A34A);
+    default:
+      return const Color(0xFF6B7280);
   }
+}
 
   bool get _isEarlier =>
-      evidence.stateLabel == 'TENTATIVE' || evidence.stateLabel == 'ESTIMATE';
+    evidence.state == CommitmentState.tentative ||
+    evidence.state == CommitmentState.possibility;
 
   @override
   Widget build(BuildContext context) {
@@ -592,7 +596,7 @@ class _EvidenceCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              evidence.stateLabel,
+              evidence.stateLabelDisplay,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -611,17 +615,15 @@ class _CommitmentTimeline extends StatelessWidget {
 
   const _CommitmentTimeline({required this.entries});
 
-  Color _stateColor(String state) {
+    Color _stateColor(CommitmentState? state) {
     switch (state) {
-      case 'TENTATIVE':
+      case CommitmentState.tentative:
         return const Color(0xFFF59E0B);
-      case 'ESTIMATE':
+      case CommitmentState.conditional:
         return const Color(0xFF3B82F6);
-      case 'APPARENT_COMMITMENT':
+      case CommitmentState.apparentCommitment:
         return const Color(0xFFDC2626);
-      case 'CUSTOMER_ASSUMPTION_OF_COMMITMENT':
-        return const Color(0xFF7C3AED);
-      case 'COMMITTED':
+      case CommitmentState.confirmed:
         return const Color(0xFF16A34A);
       default:
         return const Color(0xFF6B7280);
@@ -756,7 +758,7 @@ class _CommitmentTimeline extends StatelessWidget {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            e.state,
+                            e.stateLabelDisplay,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,

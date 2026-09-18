@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:promise_guard/core/config/commitment_state.dart';
 import 'package:promise_guard/features/drift_alert/model/drift_evidence_model.dart';
 import '../../../../core/theme/app_theme.dart';
 
@@ -8,12 +9,16 @@ class EvidenceCard extends StatelessWidget {
   const EvidenceCard({super.key, required this.evidence});
 
   Color get _chipColor {
-    return switch (evidence.stateLabel) {
-      'TENTATIVE' => AppTheme.tentative,
-      'COMMITTED' => AppTheme.committed,
-      _           => AppTheme.pending,
+    return switch (evidence.state) {
+      CommitmentState.tentative         => AppTheme.tentative,
+      CommitmentState.confirmed         => AppTheme.committed,
+      _                                 => AppTheme.pending,
     };
   }
+
+  bool get _isEarlier =>
+      evidence.state == CommitmentState.tentative ||
+      evidence.state == CommitmentState.possibility;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +29,7 @@ class EvidenceCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${evidence.stateLabel == "TENTATIVE" ? "Earlier" : "Later"} (${evidence.timestamp})',
+              '${_isEarlier ? "Earlier" : "Later"} (${evidence.timestamp})',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -51,7 +56,7 @@ class EvidenceCard extends StatelessWidget {
                 border: Border.all(color: _chipColor),
               ),
               child: Text(
-                evidence.stateLabel,
+                evidence.stateLabelDisplay,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
