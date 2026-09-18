@@ -23,55 +23,63 @@ class DriftAlertController extends GetxController {
   final RxString callName = ''.obs;
   final RxString transcriptId = ''.obs;
 
+  // New traceability fields
+  final RxString earlierEvidence = ''.obs;
+  final RxString laterEvidence = ''.obs;
+  final RxString stateChange = ''.obs;
+  final RxString missingEvidence = ''.obs;
+
   static String pendingResolution = 'pending';
 
-  
-
   @override
-void onInit() {
-  super.onInit();
-  final args = Get.arguments as Map<String, dynamic>?;
-  if (args != null) {
-    callName.value = args['callName'] as String? ?? 'Untitled Call';
-    final lines = args['transcriptLines'] as List<TranscriptLine>?;
-    if (lines != null && lines.isNotEmpty) {
-      _analyzeWithGemini(lines);
+  void onInit() {
+    super.onInit();
+    final args = Get.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      callName.value = args['callName'] as String? ?? 'Untitled Call';
+      final lines = args['transcriptLines'] as List<TranscriptLine>?;
+      if (lines != null && lines.isNotEmpty) {
+        _analyzeWithGemini(lines);
+      } else {
+        hasError.value = true;
+        errorMessage.value = 'No transcript data found. Please go back and upload a call.';
+        isLoading.value = false;
+      }
     } else {
       hasError.value = true;
-      errorMessage.value = 'No transcript data found. Please go back and upload a call.';
+      errorMessage.value = 'No data received. Please go back and upload a call.';
       isLoading.value = false;
     }
-  } else {
-    hasError.value = true;
-    errorMessage.value = 'No data received. Please go back and upload a call.';
-    isLoading.value = false;
   }
-}
 
-Future<void> _analyzeWithGemini(List<TranscriptLine> lines) async {
-  try {
-    isLoading.value = true;
-    hasError.value = false;
+  Future<void> _analyzeWithGemini(List<TranscriptLine> lines) async {
+    try {
+      isLoading.value = true;
+      hasError.value = false;
 
-    final data = await _service.analyzeDrift(lines);
+      final data = await _service.analyzeDrift(lines);
 
-    driftDetected.value = data['driftDetected'] as bool? ?? false;
-    clarifyingQuestion.value = data['clarifyingQuestion'] as String? ?? '';
-    explanation.value = data['explanation'] as String? ?? '';
-    commercialTerm.value = data['commercialTerm'] as String? ?? '';
-    evidence.assignAll(_service.parseEvidence(data));
+      driftDetected.value = data['driftDetected'] as bool? ?? false;
+      clarifyingQuestion.value = data['clarifyingQuestion'] as String? ?? '';
+      explanation.value = data['explanation'] as String? ?? '';
+      commercialTerm.value = data['commercialTerm'] as String? ?? '';
+      earlierEvidence.value = data['earlierEvidence'] as String? ?? '';
+      laterEvidence.value = data['laterEvidence'] as String? ?? '';
+      stateChange.value = data['stateChange'] as String? ?? '';
+      missingEvidence.value = data['missingEvidence'] as String? ?? '';
+      evidence.assignAll(_service.parseEvidence(data));
 
-    final items = data['agreementItems'] as List<dynamic>? ?? [];
-    agreementItems.assignAll(
-      items.map((e) => AgreementItem.fromJson(e as Map<String, dynamic>)),
-    );
-  } catch (e) {
-    hasError.value = true;
-    errorMessage.value = 'Drift analysis failed: ${e.toString()}';
-  } finally {
-    isLoading.value = false;
+      final items = data['agreementItems'] as List<dynamic>? ?? [];
+      agreementItems.assignAll(
+        items.map((e) => AgreementItem.fromJson(e as Map<String, dynamic>)),
+      );
+    } catch (e) {
+      hasError.value = true;
+      errorMessage.value = 'Drift analysis failed: ${e.toString()}';
+    } finally {
+      isLoading.value = false;
+    }
   }
-}
 
   void resolveDrift(bool confirmed) {
     pendingResolution = confirmed ? 'confirmed' : 'not_confirmed';

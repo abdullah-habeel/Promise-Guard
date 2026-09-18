@@ -30,10 +30,7 @@ class DriftAlertScreen extends StatelessWidget {
                 SizedBox(height: 16),
                 Text(
                   'Analyzing commitments...',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Color(0xFF6B7280),
-                  ),
+                  style: TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
                 ),
               ],
             ),
@@ -119,10 +116,7 @@ class DriftAlertScreen extends StatelessWidget {
                   const Text(
                     'All commitments in this call appear clear and consistent.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF6B7280),
-                    ),
+                    style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
                   ),
                   const SizedBox(height: 32),
                   FilledButton.icon(
@@ -210,9 +204,135 @@ class DriftAlertScreen extends StatelessWidget {
                   const SizedBox(height: 16),
 
                   // Evidence cards
-                  ...controller.evidence.map(
-                    (e) => _EvidenceCard(evidence: e),
-                  ),
+                  // Evidence cards
+                  ...controller.evidence.map((e) => _EvidenceCard(evidence: e)),
+                  const SizedBox(height: 8),
+
+                  // State change trail
+                  if (controller.stateChange.value.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8E1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFF59E0B)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'State Change Trail',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF92400E),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1B4F72),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  controller.earlierEvidence.value,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  controller.stateChange.value,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDC2626),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  controller.laterEvidence.value,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Missing evidence warning
+                  if (controller.missingEvidence.value.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFDC2626)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.block,
+                            color: Color(0xFFDC2626),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '⚠ Missing Evidence',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  controller.missingEvidence.value,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF4B5563),
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 8),
 
                   // Why flagged
@@ -382,8 +502,8 @@ class _EvidenceCard extends StatelessWidget {
     }
   }
 
-  bool get _isEarlier => evidence.stateLabel == 'TENTATIVE' ||
-      evidence.stateLabel == 'ESTIMATE';
+  bool get _isEarlier =>
+      evidence.stateLabel == 'TENTATIVE' || evidence.stateLabel == 'ESTIMATE';
 
   @override
   Widget build(BuildContext context) {
@@ -404,14 +524,51 @@ class _EvidenceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${_isEarlier ? 'Earlier' : 'Later'} (${evidence.timestamp})',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-            ),
+          // Line ID + timestamp row
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B4F72),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  evidence.lineId,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                evidence.timestamp,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+              const SizedBox(width: 8),
+              const Text('·', style: TextStyle(color: Color(0xFF6B7280))),
+              const SizedBox(width: 8),
+              Text(
+                evidence.speaker,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1B4F72),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _isEarlier ? 'Earlier' : 'Later',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
+
+          // Quote
           Text(
             '"${evidence.quote}"',
             style: const TextStyle(
@@ -421,7 +578,9 @@ class _EvidenceCard extends StatelessWidget {
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
+
+          // State label badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(

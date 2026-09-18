@@ -88,8 +88,11 @@ exports.analyzeDrift = onRequest(
         }
 
         const transcriptText = transcript
-            .map((line) => `[${line.time}] ${line.speaker}: ${line.text}`)
-            .join("\n");
+    .map((line, index) => {
+      const lineId = `L${String(index + 1).padStart(3, "0")}`;
+      return `${lineId} | ${line.time} | ${line.speaker}: ${line.text}`;
+    })
+    .join("\n");
 
         const prompt = `
 You are PromiseGuard, a commitment tracking system for B2B sales calls.
@@ -99,16 +102,19 @@ Analyze this sales call transcript and detect promise drift — when a commitmen
 TRANSCRIPT:
 ${transcriptText}
 
+Each line is formatted as: LINE_ID | TIMESTAMP | SPEAKER: TEXT
+
 INSTRUCTIONS:
 - Look for commitment-relevant statements about: Price, Delivery, Scope, Support
 - Classify each statement as: TENTATIVE, ESTIMATE, or COMMITTED
 - Flag drift when the same commercial term escalates in state without explicit reconfirmation
 - Do NOT accuse intent — only report language and evidence state changes
-- Base ALL values, quotes, and timestamps on the ACTUAL transcript — never invent data
+- Base ALL values, quotes, timestamps, and line IDs on the ACTUAL transcript — never invent data
+- Every evidence item MUST reference the exact LINE_ID from the transcript
 
 Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation outside the JSON.
 
-JSON shape (replace all values with REAL data from the transcript):
+JSON shape:
 {
   "driftDetected": <true or false>,
   "commercialTerm": "<the commercial term that drifted>",
@@ -116,22 +122,31 @@ JSON shape (replace all values with REAL data from the transcript):
   "clarifyingQuestion": "<a question to resolve the ambiguity>",
   "evidence": [
     {
+      "lineId": "<e.g. L014>",
       "timestamp": "<mm:ss from actual transcript>",
+      "speaker": "<speaker name>",
       "quote": "<exact quote from actual transcript>",
       "stateLabel": "TENTATIVE",
       "commercialTerm": "<actual term>"
     },
     {
+      "lineId": "<e.g. L042>",
       "timestamp": "<mm:ss from actual transcript>",
+      "speaker": "<speaker name>",
       "quote": "<exact quote from actual transcript>",
       "stateLabel": "COMMITTED",
       "commercialTerm": "<actual term>"
     }
   ],
+  "earlierEvidence": "<lineId of first mention e.g. L014>",
+  "laterEvidence": "<lineId of last mention e.g. L042>",
+  "stateChange": "<e.g. TENTATIVE → APPARENT_COMMITMENT>",
+  "missingEvidence": "<what confirmation is missing>",
   "agreementItems": [
     {
       "item": "<actual item name>",
       "value": "<actual value from transcript>",
+      "lineId": "<lineId where this was stated>",
       "evidence": "<mm:ss timestamp>",
       "participants": "<speakers involved>"
     }
