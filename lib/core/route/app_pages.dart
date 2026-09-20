@@ -8,6 +8,8 @@ import 'package:promise_guard/features/drift_alert/binding/drift_alert_binding.d
 import 'package:promise_guard/features/drift_alert/view/drift_alert_screen.dart';
 import 'package:promise_guard/features/home/binding/home_binding.dart';
 import 'package:promise_guard/features/home/view/home_screen.dart';
+import 'package:promise_guard/features/live_call/binding/live_call_binding.dart';
+import 'package:promise_guard/features/live_call/view/live_call_screen.dart';
 import 'package:promise_guard/features/process/binding/process_binding.dart';
 import 'package:promise_guard/features/process/view/process_screen.dart';
 import 'package:promise_guard/features/transcript/binding/transcript_binding.dart';
@@ -49,5 +51,10 @@ class AppPages {
       page: () => const AgreementRecordScreen(),
       binding: AgreementRecordBinding(),
     ),
+    GetPage(
+  name: AppRoutes.liveCall,
+  page: () => const LiveCallScreen(),
+  binding: LiveCallBinding(),
+),
   ];
 }

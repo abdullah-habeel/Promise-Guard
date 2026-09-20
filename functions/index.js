@@ -82,6 +82,43 @@ function applyDefaults(parsed) {
     agreementItems: Array.isArray(parsed.agreementItems) ? parsed.agreementItems : [],
   };
 }
+// ── #4 Validate same-term state-change detection ───────────────────────────
+const STATE_RANK = {
+  "POSSIBILITY": 1,
+  "TENTATIVE": 2,
+  "CONDITIONAL": 3,
+  "APPARENT_COMMITMENT": 4,
+  "CONFIRMED": 5,
+};
+
+function validateStateChange(safe) {
+  if (!safe.driftDetected) return null;
+
+  // Find earlier and later entries in commitmentTimeline
+  const earlier = safe.commitmentTimeline.find(
+      (e) => e.lineId === safe.earlierEvidence,
+  );
+  const later = safe.commitmentTimeline.find(
+      (e) => e.lineId === safe.laterEvidence,
+  );
+
+  if (!earlier || !later) {
+    return "earlierEvidence or laterEvidence not found in commitmentTimeline";
+  }
+
+  const earlierRank = STATE_RANK[earlier.state] ?? 0;
+  const laterRank = STATE_RANK[later.state] ?? 0;
+
+  if (earlierRank === 0 || laterRank === 0) {
+    return `Invalid state: earlier=${earlier.state}, later=${later.state}`;
+  }
+
+  if (laterRank <= earlierRank) {
+    return `No forward drift: earlier=${earlier.state}(${earlierRank}), later=${later.state}(${laterRank})`;
+  }
+
+  return null; // valid
+}
 
 exports.transcribeAudio = onRequest(
     {secrets: [ASSEMBLYAI_KEY], cors: true, timeoutSeconds: 300},
@@ -179,14 +216,14 @@ You are PromiseGuard, a commitment tracking system for B2B sales calls.
 
 COMMITMENT STATE MODEL:
 Every commercial commitment passes through these states in order:
-1. TENTATIVE     — "I think", "probably", "roughly", "I'd say"
-2. ESTIMATE      — "around", "approximately", numbers given without commitment
-3. APPARENT_COMMITMENT — treated as agreed without explicit confirmation
-4. CUSTOMER_ASSUMPTION_OF_COMMITMENT — customer acts as if it is confirmed
-5. COMMITTED     — explicit mutual confirmation on record
+1. POSSIBILITY        — vague interest, "we could", "maybe", "what if"
+2. TENTATIVE          — "I think", "probably", "roughly", "I could probably get approval"
+3. CONDITIONAL        — "if finance approves", "subject to sign-off", depends on condition
+4. APPARENT_COMMITMENT — treated as agreed without explicit confirmation, "yeah that should work"
+5. CONFIRMED          — explicit mutual confirmation on record, "yes that is approved"
 
 DRIFT RULE:
-Drift occurs when the SAME commercial term moves from state 1-2 to state 3-5
+Drift occurs when the SAME commercial term moves from state 1-3 to state 4-5
 WITHOUT an explicit reconfirmation between those two points.
 
 MISSING CONFIRMATION RULE:
@@ -205,7 +242,8 @@ STRICT RULES:
 - Only quote text that appears verbatim in the transcript
 - Never invent data, timestamps, speakers, or line IDs
 - Every evidence item MUST have a lineId from the transcript
-- stateLabel MUST be one of: TENTATIVE, ESTIMATE, APPARENT_COMMITMENT, CUSTOMER_ASSUMPTION_OF_COMMITMENT, COMMITTED
+- stateLabel MUST be one of: POSSIBILITY, TENTATIVE, CONDITIONAL, APPARENT_COMMITMENT, CONFIRMED
+- state MUST be one of: POSSIBILITY, TENTATIVE, CONDITIONAL, APPARENT_COMMITMENT, CONFIRMED
 - If no drift detected, return driftDetected false and empty arrays
 
 Respond ONLY with valid JSON. No markdown, no backticks, no text outside JSON.
@@ -224,7 +262,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no text outside JSON.
       "lineId": "<exact LINE_ID>",
       "timestamp": "<mm:ss>",
       "speaker": "<speaker>",
-      "state": "<one of the 5 states above>",
+      "state": "<one of: POSSIBILITY, TENTATIVE, CONDITIONAL, APPARENT_COMMITMENT, CONFIRMED>",
       "quote": "<exact quote>"
     }
   ],
@@ -234,7 +272,7 @@ Respond ONLY with valid JSON. No markdown, no backticks, no text outside JSON.
       "timestamp": "<mm:ss>",
       "speaker": "<speaker>",
       "quote": "<exact quote>",
-      "stateLabel": "<one of the 5 states>",
+      "stateLabel": "<one of: POSSIBILITY, TENTATIVE, CONDITIONAL, APPARENT_COMMITMENT, CONFIRMED>",
       "commercialTerm": "<actual term>"
     }
   ],
@@ -297,6 +335,17 @@ Respond ONLY with valid JSON. No markdown, no backticks, no text outside JSON.
             return true;
           });
         }
+                // Validate state-change direction
+        const stateChangeError = validateStateChange(safe);
+        if (stateChangeError) {
+          logger.warn("State-change validation failed", stateChangeError);
+          // Reset drift if state change is invalid
+          safe.driftDetected = false;
+          safe.stateChange = "";
+          safe.earlierEvidence = "";
+          safe.laterEvidence = "";
+          safe.missingEvidence = "";
+        }
 
         logger.info("analyzeDrift success", {
           driftDetected: safe.driftDetected,
@@ -307,6 +356,25 @@ Respond ONLY with valid JSON. No markdown, no backticks, no text outside JSON.
         return res.status(200).json(safe);
       } catch (err) {
         logger.error("analyzeDrift error", err);
+        return res.status(500).json({error: err.message});
+      }
+    },
+);
+exports.getStreamingToken = onRequest(
+    {secrets: [ASSEMBLYAI_KEY], cors: true},
+    async (req, res) => {
+      try {
+        const apiKey = ASSEMBLYAI_KEY.value();
+        const response = await fetch(
+            "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
+            {
+              method: "GET",  // ← was POST
+              headers: {Authorization: apiKey},
+            },
+        );
+        const data = await response.json();
+        return res.status(200).json({token: data.token});
+      } catch (err) {
         return res.status(500).json({error: err.message});
       }
     },

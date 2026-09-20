@@ -6,4 +6,5 @@ class AppRoutes {
   static const transcript      = '/transcript';
   static const driftAlert      = '/drift-alert';
   static const agreementRecord = '/agreement-record';
+  static const liveCall = '/live-call';
 }

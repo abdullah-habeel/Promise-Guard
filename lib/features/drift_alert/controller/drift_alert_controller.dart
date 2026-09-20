@@ -87,7 +87,7 @@ commitmentTimeline.assignAll(
     }
   }
 
-  void resolveDrift(bool confirmed) {
+    void resolveDrift(bool confirmed) {
     pendingResolution = confirmed ? 'confirmed' : 'not_confirmed';
     Get.toNamed(
       AppRoutes.agreementRecord,
@@ -95,6 +95,13 @@ commitmentTimeline.assignAll(
         'callName': callName.value,
         'agreementItems': agreementItems,
         'resolution': pendingResolution,
+        'commercialTerm': commercialTerm.value,
+        'explanation': explanation.value,
+        'clarifyingQuestion': clarifyingQuestion.value,
+        'stateChange': stateChange.value,
+        'earlierEvidence': earlierEvidence.value,
+        'laterEvidence': laterEvidence.value,
+        'missingEvidence': missingEvidence.value,
       },
     );
   }

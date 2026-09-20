@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:promise_guard/core/route/app_route.dart';
 import 'package:promise_guard/core/service/firestore_service.dart';
 import '../controller/home_controller.dart';
 
@@ -120,10 +121,47 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-                // Analyze button
-                Obx(
+// ── OR divider ─────────────────────────────────────────────────────────
+Row(
+  children: [
+    const Expanded(child: Divider(color: Color(0xFFD1D5DB))),
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Text('or',
+          style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+    ),
+    const Expanded(child: Divider(color: Color(0xFFD1D5DB))),
+  ],
+),
+const SizedBox(height: 12),
+
+// ── Live Call button ───────────────────────────────────────────────────
+OutlinedButton.icon(
+  onPressed: () => Get.toNamed(
+    AppRoutes.liveCall,
+    arguments: {'callName': controller.callName.value},
+  ),
+  icon: const Icon(Icons.mic_rounded, color: Color(0xFF1B4F72)),
+  label: const Text(
+    'Start Live Call',
+    style: TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: Color(0xFF1B4F72),
+    ),
+  ),
+  style: OutlinedButton.styleFrom(
+    side: const BorderSide(color: Color(0xFF1B4F72), width: 2),
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+),
+const SizedBox(height: 12),
+
+// Analyze button
+Obx(
                   () => FilledButton.icon(
                     onPressed: controller.fileName.value.isEmpty
                         ? null
