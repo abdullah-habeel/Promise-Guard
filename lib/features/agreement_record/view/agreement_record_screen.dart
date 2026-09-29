@@ -44,6 +44,8 @@ class AgreementRecordScreen extends StatelessWidget {
                   if (controller.agreementItems.isNotEmpty)
                     _AgreementItemsCard(controller: controller),
                   const SizedBox(height: 28),
+                                   _ExportPdfButton(controller: controller),
+                  const SizedBox(height: 12),
                   _StartNewCallButton(onTap: controller.startNewCall),
                   const SizedBox(height: 16),
                 ],
@@ -445,6 +447,33 @@ class _HeaderCell extends StatelessWidget {
         letterSpacing: 0.6,
       ),
     );
+  }
+}
+class _ExportPdfButton extends StatelessWidget {
+  final AgreementRecordController controller;
+  const _ExportPdfButton({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() => OutlinedButton.icon(
+      onPressed: controller.isExporting.value ? null : controller.exportPdf,
+      icon: controller.isExporting.value
+          ? const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.picture_as_pdf_rounded, size: 18),
+      label: Text(
+        controller.isExporting.value ? 'Exporting...' : 'Export PDF',
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF1B4F72),
+        side: const BorderSide(color: Color(0xFF1B4F72), width: 1.5),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ));
   }
 }
 

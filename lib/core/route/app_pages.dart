@@ -6,6 +6,8 @@ import 'package:promise_guard/features/auth/binding/auth_binding.dart';
 import 'package:promise_guard/features/auth/view/auth_screen.dart';
 import 'package:promise_guard/features/drift_alert/binding/drift_alert_binding.dart';
 import 'package:promise_guard/features/drift_alert/view/drift_alert_screen.dart';
+import 'package:promise_guard/features/history/binding/history_binding.dart';
+import 'package:promise_guard/features/history/view/history_screen.dart';
 import 'package:promise_guard/features/home/binding/home_binding.dart';
 import 'package:promise_guard/features/home/view/home_screen.dart';
 import 'package:promise_guard/features/live_call/binding/live_call_binding.dart';

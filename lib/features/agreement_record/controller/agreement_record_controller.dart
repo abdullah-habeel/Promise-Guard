@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:promise_guard/core/route/app_route.dart';
 import 'package:promise_guard/core/service/firestore_service.dart';
 import 'package:promise_guard/features/agreement_record/model/agreement_item_model.dart';
+import 'package:promise_guard/features/agreement_record/service/pdf_export_service.dart';
 
 class AgreementRecordController extends GetxController {
   final FirestoreService _firestoreService = FirestoreService();
@@ -14,6 +15,7 @@ class AgreementRecordController extends GetxController {
   final RxBool saved = false.obs;
   final RxString shareDocId = ''.obs;
   final RxBool linkCopied = false.obs;
+  final RxBool isExporting = false.obs;
 
   // Drift details
   final RxString commercialTerm = ''.obs;
@@ -84,6 +86,25 @@ class AgreementRecordController extends GetxController {
     await Future.delayed(const Duration(seconds: 2));
     linkCopied.value = false;
   }
+  Future<void> exportPdf() async {
+  if (isExporting.value) return;
+  try {
+    isExporting.value = true;
+    await PdfExportService().exportAgreementRecord(
+      callName: callName.value,
+      commercialTerm: commercialTerm.value,
+      resolution: resolutionStatus.value,
+      stateChange: stateChange.value,
+      earlierEvidence: earlierEvidence.value,
+      laterEvidence: laterEvidence.value,
+      missingEvidence: missingEvidence.value,
+      clarifyingQuestion: clarifyingQuestion.value,
+      agreementItems: agreementItems,
+    );
+  } finally {
+    isExporting.value = false;
+  }
+}
 
   void startNewCall() => Get.offAllNamed(AppRoutes.home);
 }
