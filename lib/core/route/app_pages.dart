@@ -2,8 +2,6 @@ import 'package:get/get.dart';
 import 'package:promise_guard/core/route/app_route.dart';
 import 'package:promise_guard/features/agreement_record/binding/agreement_record_binding.dart';
 import 'package:promise_guard/features/agreement_record/view/agreement_record_screen.dart';
-import 'package:promise_guard/features/auth/binding/auth_binding.dart';
-import 'package:promise_guard/features/auth/view/auth_screen.dart';
 import 'package:promise_guard/features/drift_alert/binding/drift_alert_binding.dart';
 import 'package:promise_guard/features/drift_alert/view/drift_alert_screen.dart';
 import 'package:promise_guard/features/history/binding/history_binding.dart';
@@ -16,18 +14,16 @@ import 'package:promise_guard/features/process/binding/process_binding.dart';
 import 'package:promise_guard/features/process/view/process_screen.dart';
 import 'package:promise_guard/features/transcript/binding/transcript_binding.dart';
 import 'package:promise_guard/features/transcript/view/transcript_screen.dart';
+import 'package:promise_guard/features/verify/binding/verify_binding.dart';
+import 'package:promise_guard/features/verify/view/verify_screen.dart';
 
 class AppPages {
   AppPages._();
 
-  static const initial = AppRoutes.auth;
+  static const initial = AppRoutes.home;
 
   static final pages = [
-    GetPage(
-      name: AppRoutes.auth,
-      page: () => const AuthScreen(),
-      binding: AuthBinding(),
-    ),
+    
     GetPage(
       name: AppRoutes.home,
       page: () => const HomeScreen(),
@@ -62,6 +58,11 @@ GetPage(
   name: AppRoutes.history,
   page: () => const HistoryScreen(),
   binding: HistoryBinding(),
+),
+GetPage(
+  name: AppRoutes.verify,
+  page: () => const VerifyScreen(),
+  binding: VerifyBinding(),
 ),
   ];
 }

@@ -1,25 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:promise_guard/features/agreement_record/model/agreement_item_model.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
+import 'dart:html' as html;  // works on Flutter web only
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String _getUserId() {
-    final user = _auth.currentUser;
-    if (user != null) return user.uid;
-    return _getGuestId();
-  }
-
-  String _guestId = '';
-
-  String _getGuestId() {
-    if (_guestId.isNotEmpty) return _guestId;
-    _guestId = _generateId();
-    return _guestId;
+  String _getSessionId() {
+    const key = 'pg_session_id';
+    String? id = html.window.localStorage[key];
+    if (id != null && id.isNotEmpty) return id;
+    id = _generateId();
+    html.window.localStorage[key] = id;
+    return id;
   }
 
   String _generateId() {
@@ -37,9 +30,8 @@ class FirestoreService {
     required String clarifyingQuestion,
     required List<AgreementItem> agreementItems,
   }) async {
-    final userId = _getUserId();
     final docRef = await _db.collection('calls').add({
-      'userId': userId,
+      'sessionId': _getSessionId(),
       'callName': callName,
       'resolution': resolution,
       'driftDetected': driftDetected,
@@ -53,19 +45,9 @@ class FirestoreService {
   }
 
   Stream<QuerySnapshot> getPastCalls() {
-    final userId = _getUserId();
     return _db
         .collection('calls')
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snapshot) {
-      final docs = snapshot.docs.toList();
-      docs.sort((a, b) {
-        final aTime = (a['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-        final bTime = (b['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-        return bTime.compareTo(aTime);
-      });
-      return snapshot;
-    });
+        .where('sessionId', isEqualTo: _getSessionId())
+        .snapshots();
   }
 }

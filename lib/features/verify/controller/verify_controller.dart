@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import '../model/call_record_model.dart';
+import 'package:promise_guard/features/history/model/call_record_model.dart';
 
-class HistoryController extends GetxController {
+class VerifyController extends GetxController {
   final RxBool isLoading = true.obs;
   final RxString error = ''.obs;
   final Rx<CallRecordModel?> record = Rx(null);
@@ -10,9 +10,13 @@ class HistoryController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    final args = Get.arguments as Map<String, dynamic>?;
-    final docId = args?['docId'] as String?;
-    if (docId != null) _fetchCall(docId);
+    final docId = Get.parameters['docId'];
+    if (docId != null && docId.isNotEmpty) {
+      _fetchCall(docId);
+    } else {
+      error.value = 'Invalid verification link.';
+      isLoading.value = false;
+    }
   }
 
   Future<void> _fetchCall(String docId) async {
@@ -22,16 +26,14 @@ class HistoryController extends GetxController {
       if (doc.exists) {
         record.value = CallRecordModel.fromDoc(doc);
       } else {
-        error.value = 'Call record not found.';
+        error.value = 'This verification link is invalid or expired.';
       }
     } catch (e) {
-      error.value = 'Failed to load call.';
+      error.value = 'Failed to load record.';
     } finally {
       isLoading.value = false;
     }
   }
-
-  String get shareUrl => 'https://promiseguard.vercel.app/verify/${record.value?.docId ?? ''}';
 
   String formatDate(DateTime? dt) {
     if (dt == null) return 'Unknown date';

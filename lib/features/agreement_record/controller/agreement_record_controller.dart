@@ -31,7 +31,7 @@ class AgreementRecordController extends GetxController {
   bool get needsConfirmation => resolutionStatus.value == 'not_confirmed';
 
   String get shareUrl =>
-      shareDocId.value.isEmpty ? '' : 'https://promiseguard.web.app/verify/${shareDocId.value}';
+      shareDocId.value.isEmpty ? '' :'https://promiseguard.vercel.app/verify/${shareDocId.value}';
 
   @override
   void onInit() {

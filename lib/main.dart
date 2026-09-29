@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'core/route/app_pages.dart';
 
 void main() async {
@@ -10,6 +12,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  if (kIsWeb) usePathUrlStrategy();
   runApp(const PromiseGuardApp());
 }
 

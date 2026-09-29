@@ -24,7 +24,7 @@ class PdfExportService {
         build: (context) => [
           // Title
           pw.Text(
-            'PromiseGuard — Agreement Record',
+             'PromiseGuard - Agreement Record',
             style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 4),
@@ -37,9 +37,9 @@ class PdfExportService {
           // Details
           _section('Commercial Term', commercialTerm),
           _section('Status', resolution == 'confirmed' ? 'CONFIRMED' : 'NEEDS CONFIRMATION'),
-          if (stateChange.isNotEmpty) _section('Commitment Path', stateChange),
+          if (stateChange.isNotEmpty) _section('Commitment Path', stateChange.replaceAll('→', '->')),
           if (earlierEvidence.isNotEmpty)
-            _section('Evidence', '$earlierEvidence → $laterEvidence'),
+          _section('Evidence', '$earlierEvidence -> $laterEvidence'),
           if (missingEvidence.isNotEmpty) _section('Missing Evidence', missingEvidence),
           if (clarifyingQuestion.isNotEmpty)
             _section('Suggested Question', '"$clarifyingQuestion"'),

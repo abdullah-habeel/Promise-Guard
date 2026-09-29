@@ -40,8 +40,6 @@ dependencies:
   firebase_core: ^4.15.0
   cloud_firestore: ^6.10.0
   shared_preferences: ^2.5.5
-  firebase_auth: 6.7.0
-  google_sign_in: 6.2.1
   web_socket_channel: ^3.0.3
   web: ^1.1.1
   google_fonts: ^8.2.1

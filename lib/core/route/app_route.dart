@@ -1,6 +1,5 @@
 class AppRoutes {
   AppRoutes._();
-  static const auth            = '/auth';
   static const home            = '/';
   static const processing      = '/processing';
   static const transcript      = '/transcript';
@@ -8,4 +7,5 @@ class AppRoutes {
   static const agreementRecord = '/agreement-record';
   static const liveCall = '/live-call';
   static const history = '/history';
+  static const verify = '/verify/:docId';
 }

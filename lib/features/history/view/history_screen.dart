@@ -10,8 +10,7 @@ class HistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = Get.find<HistoryController>();
-
+    final controller = Get.put(HistoryController());
     return BackgroundScaffold(
       appBar: AppBar(
         backgroundColor: AppTheme.canvas,
