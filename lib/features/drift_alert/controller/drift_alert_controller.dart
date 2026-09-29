@@ -61,24 +61,35 @@ class DriftAlertController extends GetxController {
 
       final data = await _service.analyzeDrift(lines);
 
-      driftDetected.value = data['driftDetected'] as bool? ?? false;
-      clarifyingQuestion.value = data['clarifyingQuestion'] as String? ?? '';
-      explanation.value = data['explanation'] as String? ?? '';
-      commercialTerm.value = data['commercialTerm'] as String? ?? '';
-      earlierEvidence.value = data['earlierEvidence'] as String? ?? '';
-      laterEvidence.value = data['laterEvidence'] as String? ?? '';
-      stateChange.value = data['stateChange'] as String? ?? '';
-      missingEvidence.value = data['missingEvidence'] as String? ?? '';
-      evidence.assignAll(_service.parseEvidence(data));
-      final timeline = data['commitmentTimeline'] as List<dynamic>? ?? [];
-commitmentTimeline.assignAll(
-  timeline.map((e) => CommitmentTimelineEntry.fromJson(e as Map<String, dynamic>)),
-);
+     driftDetected.value = data['driftDetected'] as bool? ?? false;
+clarifyingQuestion.value = data['clarifyingQuestion'] as String? ?? '';
+explanation.value = data['explanation'] as String? ?? '';
+commercialTerm.value = data['commercialTerm'] as String? ?? '';
 
-      final items = data['agreementItems'] as List<dynamic>? ?? [];
-      agreementItems.assignAll(
-        items.map((e) => AgreementItem.fromJson(e as Map<String, dynamic>)),
-      );
+if (driftDetected.value) {
+  earlierEvidence.value = data['earlierEvidence'] as String? ?? '';
+  laterEvidence.value = data['laterEvidence'] as String? ?? '';
+  stateChange.value = data['stateChange'] as String? ?? '';
+  missingEvidence.value = data['missingEvidence'] as String? ?? '';
+  evidence.assignAll(_service.parseEvidence(data));
+  final timeline = data['commitmentTimeline'] as List<dynamic>? ?? [];
+  commitmentTimeline.assignAll(
+    timeline.map((e) => CommitmentTimelineEntry.fromJson(e as Map<String, dynamic>)),
+  );
+  final items = data['agreementItems'] as List<dynamic>? ?? [];
+  agreementItems.assignAll(
+    items.map((e) => AgreementItem.fromJson(e as Map<String, dynamic>)),
+  );
+} else {
+  // guarantee clean state when no drift
+  earlierEvidence.value = '';
+  laterEvidence.value = '';
+  stateChange.value = '';
+  missingEvidence.value = '';
+  evidence.clear();
+  commitmentTimeline.clear();
+  agreementItems.clear();
+}
     } catch (e) {
       hasError.value = true;
       errorMessage.value = 'Drift analysis failed: ${e.toString()}';
@@ -95,6 +106,7 @@ commitmentTimeline.assignAll(
         'callName': callName.value,
         'agreementItems': agreementItems,
         'resolution': pendingResolution,
+        'driftDetected': driftDetected.value, // ← add this
         'commercialTerm': commercialTerm.value,
         'explanation': explanation.value,
         'clarifyingQuestion': clarifyingQuestion.value,

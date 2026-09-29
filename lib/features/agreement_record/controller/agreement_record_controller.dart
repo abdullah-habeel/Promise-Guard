@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:promise_guard/core/route/app_route.dart';
 import 'package:promise_guard/core/service/firestore_service.dart';
@@ -11,6 +12,8 @@ class AgreementRecordController extends GetxController {
   final RxString callName = ''.obs;
   final RxBool isSaving = false.obs;
   final RxBool saved = false.obs;
+  final RxString shareDocId = ''.obs;
+  final RxBool linkCopied = false.obs;
 
   // Drift details
   final RxString commercialTerm = ''.obs;
@@ -20,27 +23,29 @@ class AgreementRecordController extends GetxController {
   final RxString earlierEvidence = ''.obs;
   final RxString laterEvidence = ''.obs;
   final RxString missingEvidence = ''.obs;
+  bool _analyzedDriftDetected = false;
 
   bool get isConfirmed => resolutionStatus.value == 'confirmed';
   bool get needsConfirmation => resolutionStatus.value == 'not_confirmed';
+
+  String get shareUrl =>
+      shareDocId.value.isEmpty ? '' : 'https://promiseguard.web.app/verify/${shareDocId.value}';
 
   @override
   void onInit() {
     super.onInit();
     final args = Get.arguments as Map<String, dynamic>?;
     if (args != null) {
-      callName.value        = args['callName']        as String? ?? 'Untitled Call';
-      resolutionStatus.value = args['resolution']     as String? ?? 'pending';
-      commercialTerm.value  = args['commercialTerm']  as String? ?? '';
-      explanation.value     = args['explanation']     as String? ?? '';
+      callName.value           = args['callName']           as String? ?? 'Untitled Call';
+      resolutionStatus.value   = args['resolution']         as String? ?? 'pending';
+      commercialTerm.value     = args['commercialTerm']     as String? ?? '';
+      explanation.value        = args['explanation']        as String? ?? '';
       clarifyingQuestion.value = args['clarifyingQuestion'] as String? ?? '';
-      stateChange.value     = args['stateChange']     as String? ?? '';
-      earlierEvidence.value = args['earlierEvidence'] as String? ?? '';
-      laterEvidence.value   = args['laterEvidence']   as String? ?? '';
-      missingEvidence.value = args['missingEvidence'] as String? ?? '';
-      print('DEBUG commercialTerm: ${commercialTerm.value}');
-      print('DEBUG stateChange: ${stateChange.value}');
-      print('DEBUG missingEvidence: ${missingEvidence.value}');
+      stateChange.value        = args['stateChange']        as String? ?? '';
+      earlierEvidence.value    = args['earlierEvidence']    as String? ?? '';
+      laterEvidence.value      = args['laterEvidence']      as String? ?? '';
+      missingEvidence.value    = args['missingEvidence']    as String? ?? '';
+      _analyzedDriftDetected   = args['driftDetected']      as bool? ?? false;
       final items = args['agreementItems'];
       if (items is List<AgreementItem>) {
         agreementItems.assignAll(items);
@@ -54,21 +59,30 @@ class AgreementRecordController extends GetxController {
   Future<void> _saveToFirestore() async {
     try {
       isSaving.value = true;
-      await _firestoreService.saveCall(
+      final docId = await _firestoreService.saveCall(
         callName: callName.value,
         resolution: resolutionStatus.value,
-        driftDetected: true,
+        driftDetected: _analyzedDriftDetected,
         commercialTerm: commercialTerm.value,
         explanation: explanation.value,
         clarifyingQuestion: clarifyingQuestion.value,
         agreementItems: agreementItems,
       );
+      shareDocId.value = docId;
       saved.value = true;
     } catch (e) {
       // Silent fail
     } finally {
       isSaving.value = false;
     }
+  }
+
+  Future<void> copyShareLink() async {
+    if (shareUrl.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: shareUrl));
+    linkCopied.value = true;
+    await Future.delayed(const Duration(seconds: 2));
+    linkCopied.value = false;
   }
 
   void startNewCall() => Get.offAllNamed(AppRoutes.home);

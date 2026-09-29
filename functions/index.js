@@ -244,10 +244,13 @@ STRICT RULES:
 - Every evidence item MUST have a lineId from the transcript
 - stateLabel MUST be one of: POSSIBILITY, TENTATIVE, CONDITIONAL, APPARENT_COMMITMENT, CONFIRMED
 - state MUST be one of: POSSIBILITY, TENTATIVE, CONDITIONAL, APPARENT_COMMITMENT, CONFIRMED
-- If no drift detected, return driftDetected false and empty arrays
-
+- If no drift detected, return driftDetected false, empty arrays for evidence and commitmentTimeline, and empty array for agreementItems
 Respond ONLY with valid JSON. No markdown, no backticks, no text outside JSON.
-
+If driftDetected is false:
+- evidence MUST be []
+- commitmentTimeline MUST be []
+- agreementItems MUST be []
+- earlierEvidence, laterEvidence, stateChange, missingEvidence MUST be empty strings
 {
   "driftDetected": <true or false>,
   "commercialTerm": "<the commercial term that drifted, empty string if none>",

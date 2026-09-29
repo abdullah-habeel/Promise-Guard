@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:promise_guard/features/live_call/widgets/drift_warning_banner.dart';
 import '../controller/live_call_controller.dart';
 
 class LiveCallScreen extends StatelessWidget {
@@ -30,6 +31,20 @@ class LiveCallScreen extends StatelessWidget {
                 status: controller.statusMessage.value,
                 error: controller.errorMessage.value,
               )),
+
+          // ── DRIFT WARNING BANNER ──────────────────────────────
+          Obx(() {
+            if (!controller.liveDriftDetected.value) {
+              return const SizedBox.shrink();
+            }
+            return DriftWarningBanner(
+              term: controller.liveDriftTerm.value,
+              stateLabel: controller.liveDriftStateLabel.value,
+              matchedLine: controller.liveDriftMatchedLine.value,
+              onDismiss: controller.dismissLiveDrift,
+            );
+          }),
+          // ─────────────────────────────────────────────────────
 
           // Transcript
           Expanded(

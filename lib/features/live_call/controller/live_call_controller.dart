@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:promise_guard/core/config/app_config.dart';
 import 'package:promise_guard/core/route/app_route.dart';
+import 'package:promise_guard/features/live_call/service/live_drift_checker_service.dart';
 import 'package:promise_guard/features/transcript/model/transcript_line_model.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:js_interop';
@@ -14,6 +15,7 @@ import 'package:web/web.dart' as web;
 class LiveTranscriptLine {
   final String speaker;
   final RxString text;
+  DateTime? committedAt;
 
   LiveTranscriptLine({required this.speaker, required String initialText})
       : text = initialText.obs;
@@ -27,6 +29,14 @@ class LiveCallController extends GetxController {
   final RxString errorMessage = ''.obs;
   final RxList<LiveTranscriptLine> lines = <LiveTranscriptLine>[].obs;
   final RxString callName = ''.obs;
+
+  // Live drift fields
+  final RxBool liveDriftDetected = false.obs;
+  final RxString liveDriftTerm = ''.obs;
+  final RxString liveDriftStateLabel = ''.obs;
+  final RxString liveDriftMatchedLine = ''.obs;
+  int _committedLineCount = 0;
+  DateTime? _callStartTime;
 
   WebSocketChannel? _channel;
   web.MediaStream? _micStream;
@@ -52,15 +62,12 @@ class LiveCallController extends GetxController {
     statusMessage.value = 'Requesting microphone…';
 
     try {
-      // 1. Get microphone
       _micStream = await _getUserMedia();
       statusMessage.value = 'Fetching streaming token…';
 
-      // 2. Get token from Cloud Function
       final token = await _fetchStreamingToken();
       statusMessage.value = 'Connecting to AssemblyAI…';
 
-      // 3. Connect WebSocket
       final uri = Uri.parse(
         'wss://streaming.assemblyai.com/v3/ws'
         '?sample_rate=16000'
@@ -76,10 +83,10 @@ class LiveCallController extends GetxController {
         onDone: _onDone,
       );
 
-      // 4. Start Web Audio API — sends raw PCM to WebSocket
       await _startAudioCapture();
 
       isConnecting.value = false;
+      _callStartTime = DateTime.now();
       isRecording.value = true;
       statusMessage.value = 'Recording… speak now';
     } catch (e) {
@@ -91,66 +98,57 @@ class LiveCallController extends GetxController {
   }
 
   Future<void> _startAudioCapture() async {
-    // Create AudioContext at 16kHz to match WebSocket declaration
     _audioContext = web.AudioContext(
       web.AudioContextOptions(sampleRate: 16000),
     );
 
-    // Connect mic stream to audio graph
     _source = _audioContext!.createMediaStreamSource(_micStream!);
-
-    // ScriptProcessorNode gives us raw Float32 PCM chunks
-    // bufferSize 4096, 1 input channel, 1 output channel
     _processor = _audioContext!.createScriptProcessor(4096, 1, 1);
 
     _processor!.addEventListener(
-  'audioprocess',
-  (web.Event event) {
-    if (!isRecording.value) return;
-    final audioEvent = event as web.AudioProcessingEvent;
-    final channelData = audioEvent.inputBuffer.getChannelData(0);
-    final pcmBytes = _float32ToInt16Bytes(channelData);
-    _channel?.sink.add(pcmBytes);
-  }.toJS,
-);
+      'audioprocess',
+      (web.Event event) {
+        if (!isRecording.value) return;
+        final audioEvent = event as web.AudioProcessingEvent;
+        final channelData = audioEvent.inputBuffer.getChannelData(0);
+        final pcmBytes = _float32ToInt16Bytes(channelData);
+        _channel?.sink.add(pcmBytes);
+      }.toJS,
+    );
 
     _source!.connect(_processor!);
-    // Must connect to destination to keep the graph running
     _processor!.connect(_audioContext!.destination);
   }
 
   Uint8List _float32ToInt16Bytes(JSFloat32Array float32) {
-  final floatList = float32.toDart;
-  final length = floatList.length;
-  final byteData = ByteData(length * 2);
+    final floatList = float32.toDart;
+    final length = floatList.length;
+    final byteData = ByteData(length * 2);
 
-  for (int i = 0; i < length; i++) {
-    final sample = (floatList[i] * 32767.0).clamp(-32768.0, 32767.0).toInt();
-    byteData.setInt16(i * 2, sample, Endian.little);
+    for (int i = 0; i < length; i++) {
+      final sample =
+          (floatList[i] * 32767.0).clamp(-32768.0, 32767.0).toInt();
+      byteData.setInt16(i * 2, sample, Endian.little);
+    }
+
+    return byteData.buffer.asUint8List();
   }
-
-  return byteData.buffer.asUint8List();
-}
 
   Future<void> endCall() async {
     if (isEnding.value) return;
     isEnding.value = true;
     statusMessage.value = 'Processing…';
 
-    // Stop audio capture
     _stopAudioCapture();
 
-    // Tell AssemblyAI to flush
     try {
       _channel?.sink.add(jsonEncode({'terminate_session': true}));
     } catch (_) {}
 
-    // Wait for final transcripts
     await Future.delayed(const Duration(milliseconds: 1500));
     await _channel?.sink.close();
     await _wsSub?.cancel();
 
-    // Stop mic
     _micStream?.getTracks().toDart.forEach((t) => t.stop());
 
     isRecording.value = false;
@@ -191,9 +189,8 @@ class LiveCallController extends GetxController {
   }
 
   Future<String> _fetchStreamingToken() async {
-    final response = await http.post(
-      Uri.parse(AppConfig.getStreamingTokenUrl),
-    );
+    final response =
+        await http.post(Uri.parse(AppConfig.getStreamingTokenUrl));
     if (response.statusCode != 200) {
       throw Exception('Token fetch failed: ${response.body}');
     }
@@ -206,30 +203,31 @@ class LiveCallController extends GetxController {
   }
 
   void _onMessage(dynamic raw) {
-  try {
-    final msg = jsonDecode(raw as String) as Map<String, dynamic>;
-    final type = msg['type'] as String?;
+    try {
+      final msg = jsonDecode(raw as String) as Map<String, dynamic>;
+      final type = msg['type'] as String?;
 
-    if (type == 'Turn') {
-      final text = (msg['transcript'] as String? ?? '').trim();
-      if (text.isEmpty) return;
+      if (type == 'Turn') {
+        final text = (msg['transcript'] as String? ?? '').trim();
+        if (text.isEmpty) return;
 
-      final isFinal = msg['end_of_turn'] as bool? ?? false;
-      final speakerLabel = msg['speaker_label'] as String? ?? 'A';
-      final speaker = speakerLabel == 'PENDING' ? 'Speaker A' : 'Speaker $speakerLabel';
+        final isFinal = msg['end_of_turn'] as bool? ?? false;
+        final speakerLabel = msg['speaker_label'] as String? ?? 'A';
+        final speaker =
+            speakerLabel == 'PENDING' ? 'Speaker A' : 'Speaker $speakerLabel';
 
-      if (isFinal) {
-        _commitLine(speaker, text);
-      } else {
-        _updatePartial(speaker, text);
+        if (isFinal) {
+          _commitLine(speaker, text);
+        } else {
+          _updatePartial(speaker, text);
+        }
       }
-    }
 
-    if (type == 'error') {
-      errorMessage.value = msg['error']?.toString() ?? 'Unknown error';
-    }
-  } catch (_) {}
-}
+      if (type == 'error') {
+        errorMessage.value = msg['error']?.toString() ?? 'Unknown error';
+      }
+    } catch (_) {}
+  }
 
   void _updatePartial(String speaker, String text) {
     final idx = _openLineIndex[speaker];
@@ -246,19 +244,61 @@ class LiveCallController extends GetxController {
     final idx = _openLineIndex[speaker];
     if (idx != null && idx < lines.length) {
       lines[idx].text.value = text;
+      lines[idx].committedAt = DateTime.now();
     } else {
-      lines.add(LiveTranscriptLine(speaker: speaker, initialText: text));
+      final line = LiveTranscriptLine(speaker: speaker, initialText: text);
+      line.committedAt = DateTime.now();
+      lines.add(line);
     }
     _openLineIndex.remove(speaker);
+
+    _committedLineCount++;
+    if (_committedLineCount % 5 == 0) {
+      _runLiveDriftCheck();
+    }
+  }
+
+  void _runLiveDriftCheck() {
+    final allText = lines
+        .map((l) => l.text.value.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    final result = LiveDriftChecker.check(allText);
+
+    if (result.driftDetected) {
+      liveDriftDetected.value = true;
+      liveDriftTerm.value = result.term;
+      liveDriftStateLabel.value = result.stateLabel;
+      liveDriftMatchedLine.value = result.matchedLine;
+    }
+  }
+
+  void dismissLiveDrift() {
+    liveDriftDetected.value = false;
+    liveDriftTerm.value = '';
+    liveDriftStateLabel.value = '';
+    liveDriftMatchedLine.value = '';
   }
 
   List<TranscriptLine> _buildTranscriptLines() {
     final result = <TranscriptLine>[];
+    final startTime = _callStartTime ?? DateTime.now();
+
     for (int i = 0; i < lines.length; i++) {
       final t = lines[i].text.value.trim();
       if (t.isEmpty) continue;
+
+      final elapsedSeconds = lines[i].committedAt != null
+          ? lines[i].committedAt!.difference(startTime).inSeconds
+          : i;
+      final minutes = elapsedSeconds ~/ 60;
+      final seconds = elapsedSeconds % 60;
+      final time =
+          '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+
       result.add(TranscriptLine(
-        time: '00:${i.toString().padLeft(2, '0')}',
+        time: time,
         speaker: lines[i].speaker,
         role: lines[i].speaker == 'Speaker A' ? 'salesperson' : 'customer',
         text: t,

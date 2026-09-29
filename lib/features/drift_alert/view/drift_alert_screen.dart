@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:promise_guard/core/config/commitment_state.dart';
 import 'package:promise_guard/features/agreement_record/model/commitment_timeline_model.dart';
+import 'package:promise_guard/features/drift_alert/widgets/scafold.dart';
 import '../controller/drift_alert_controller.dart';
 import '../model/drift_evidence_model.dart';
 
@@ -12,8 +13,7 @@ class DriftAlertScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = Get.find<DriftAlertController>();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F9),
+    return BackgroundScaffold(
       appBar: AppBar(
         title: const Text('Agreement Check'),
         leading: IconButton(
