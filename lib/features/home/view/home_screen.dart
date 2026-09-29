@@ -449,7 +449,7 @@ class HomeScreen extends StatelessWidget {
                     final isConfirmed = resolution == 'confirmed';
 
                     return InkWell(
-                      onTap: () {},
+                    onTap: () => Get.toNamed(AppRoutes.history, arguments: {'docId': docs[index].id}),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         child: Row(

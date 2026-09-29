@@ -56,5 +56,10 @@ class AppPages {
   page: () => const LiveCallScreen(),
   binding: LiveCallBinding(),
 ),
+GetPage(
+  name: AppRoutes.history,
+  page: () => const HistoryScreen(),
+  binding: HistoryBinding(),
+),
   ];
 }
