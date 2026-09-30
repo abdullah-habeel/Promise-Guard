@@ -8,7 +8,26 @@ import '../model/drift_evidence_model.dart';
 
 class DriftAlertScreen extends StatelessWidget {
   const DriftAlertScreen({super.key});
+String _buildTimestampRange(DriftAlertController controller) {
+    if (controller.evidence.isEmpty) return '';
+    final first = controller.evidence.first.timestamp;
+    final last = controller.evidence.last.timestamp;
+    if (first == last) return 'at $first';
+    return 'from $first to $last';
+  }
+  String _getEarlierTimestamp(DriftAlertController controller) {
+  final match = controller.commitmentTimeline.firstWhereOrNull(
+    (e) => e.lineId == controller.earlierEvidence.value,
+  );
+  return match?.timestamp ?? '';
+}
 
+String _getLaterTimestamp(DriftAlertController controller) {
+  final match = controller.commitmentTimeline.firstWhereOrNull(
+    (e) => e.lineId == controller.laterEvidence.value,
+  );
+  return match?.timestamp ?? '';
+}
   @override
   Widget build(BuildContext context) {
     final controller = Get.find<DriftAlertController>();
@@ -179,26 +198,48 @@ class DriftAlertScreen extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '⚠ PROMISE DRIFT DETECTED',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFE65100),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                controller.commercialTerm.value,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFFE65100),
-                                ),
-                              ),
-                            ],
-                          ),
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    const Text(
+      '⚠ PROMISE DRIFT DETECTED',
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFFE65100),
+      ),
+    ),
+    const SizedBox(height: 4),
+    Text(
+      controller.commercialTerm.value,
+      style: const TextStyle(
+        fontSize: 13,
+        color: Color(0xFFE65100),
+      ),
+    ),
+    // ── show drift window timestamps ──
+    if (controller.evidence.isNotEmpty) ...[
+      const SizedBox(height: 6),
+      Row(
+        children: [
+          const Icon(
+            Icons.access_time,
+            size: 12,
+            color: Color(0xFFE65100),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            _buildTimestampRange(controller),
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFFE65100),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    ],
+  ],
+),
                         ),
                       ],
                     ),
@@ -236,58 +277,84 @@ class DriftAlertScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1B4F72),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  controller.earlierEvidence.value,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    fontFamily: 'monospace',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  controller.stateChange.value,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF92400E),
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFDC2626),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  controller.laterEvidence.value,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    fontFamily: 'monospace',
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+  children: [
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 3,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B4F72),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            controller.earlierEvidence.value,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          _getEarlierTimestamp(controller),
+          style: const TextStyle(
+            fontSize: 10,
+            color: Color(0xFF92400E),
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(width: 8),
+    Expanded(
+      child: Text(
+        controller.stateChange.value,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF92400E),
+        ),
+      ),
+    ),
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 3,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xFFDC2626),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            controller.laterEvidence.value,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          _getLaterTimestamp(controller),
+          style: const TextStyle(
+            fontSize: 10,
+            color: Color(0xFF92400E),
+          ),
+        ),
+      ],
+    ),
+  ],
+),
                         ],
                       ),
                     ),

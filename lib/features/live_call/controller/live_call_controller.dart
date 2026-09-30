@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:promise_guard/core/config/app_config.dart';
 import 'package:promise_guard/core/route/app_route.dart';
+import 'package:promise_guard/features/live_call/service/live_call_geminai_service.dart';
 import 'package:promise_guard/features/live_call/service/live_drift_checker_service.dart';
 import 'package:promise_guard/features/transcript/model/transcript_line_model.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -37,6 +38,7 @@ class LiveCallController extends GetxController {
   final RxString liveDriftMatchedLine = ''.obs;
   int _committedLineCount = 0;
   DateTime? _callStartTime;
+  bool _isGeminiChecking = false; // prevents concurrent Gemini calls
 
   WebSocketChannel? _channel;
   web.MediaStream? _micStream;
@@ -258,20 +260,41 @@ class LiveCallController extends GetxController {
     }
   }
 
-  void _runLiveDriftCheck() {
+  Future<void> _runLiveDriftCheck() async {
     final allText = lines
         .map((l) => l.text.value.trim())
         .where((t) => t.isNotEmpty)
         .toList();
 
-    final result = LiveDriftChecker.check(allText);
+    // Step 1 — run local keyword check first (instant, zero cost)
+    final keywordResult = LiveDriftChecker.check(allText);
 
-    if (result.driftDetected) {
-      liveDriftDetected.value = true;
-      liveDriftTerm.value = result.term;
-      liveDriftStateLabel.value = result.stateLabel;
-      liveDriftMatchedLine.value = result.matchedLine;
+    if (keywordResult.driftDetected) {
+      // Keyword caught it — show banner immediately
+      _applyDriftResult(keywordResult);
+      return;
     }
+
+    // Step 2 — keyword missed it, send to Gemini
+    // Skip if Gemini is already running or drift already showing
+    if (_isGeminiChecking || liveDriftDetected.value) return;
+
+    _isGeminiChecking = true;
+    try {
+      final geminiResult = await LiveGeminiChecker.check(allText);
+      if (geminiResult.driftDetected) {
+        _applyDriftResult(geminiResult);
+      }
+    } finally {
+      _isGeminiChecking = false;
+    }
+  }
+
+  void _applyDriftResult(DriftCheckResult result) {
+    liveDriftDetected.value = true;
+    liveDriftTerm.value = result.term;
+    liveDriftStateLabel.value = result.stateLabel;
+    liveDriftMatchedLine.value = result.matchedLine;
   }
 
   void dismissLiveDrift() {

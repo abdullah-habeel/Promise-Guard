@@ -9,6 +9,10 @@ class AppConfig {
 
   static const analyzeDriftUrl =
       'https://us-central1-promise-guard.cloudfunctions.net/analyzeDrift';
-      static const getStreamingTokenUrl =
-    'https://us-central1-promise-guard.cloudfunctions.net/getStreamingToken';
+
+  static const getStreamingTokenUrl =
+      'https://us-central1-promise-guard.cloudfunctions.net/getStreamingToken';
+
+  static const analyzeDriftLiveUrl =
+      'https://us-central1-promise-guard.cloudfunctions.net/analyzeDriftLive'; // ← new
 }

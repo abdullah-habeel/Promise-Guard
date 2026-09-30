@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:promise_guard/core/route/app_route.dart';
 import 'package:promise_guard/core/service/firestore_service.dart';
 import 'package:promise_guard/features/agreement_record/model/agreement_item_model.dart';
+import 'package:promise_guard/features/agreement_record/model/commitment_timeline_model.dart';
 import 'package:promise_guard/features/agreement_record/service/pdf_export_service.dart';
 
 class AgreementRecordController extends GetxController {
@@ -25,13 +26,16 @@ class AgreementRecordController extends GetxController {
   final RxString earlierEvidence = ''.obs;
   final RxString laterEvidence = ''.obs;
   final RxString missingEvidence = ''.obs;
+  final RxList<CommitmentTimelineEntry> commitmentTimeline =
+      <CommitmentTimelineEntry>[].obs;
   bool _analyzedDriftDetected = false;
 
   bool get isConfirmed => resolutionStatus.value == 'confirmed';
   bool get needsConfirmation => resolutionStatus.value == 'not_confirmed';
 
-  String get shareUrl =>
-      shareDocId.value.isEmpty ? '' :'https://promiseguard.vercel.app/verify/${shareDocId.value}';
+  String get shareUrl => shareDocId.value.isEmpty
+      ? ''
+      : 'https://promiseguard.vercel.app/verify/${shareDocId.value}';
 
   @override
   void onInit() {
@@ -48,11 +52,19 @@ class AgreementRecordController extends GetxController {
       laterEvidence.value      = args['laterEvidence']      as String? ?? '';
       missingEvidence.value    = args['missingEvidence']    as String? ?? '';
       _analyzedDriftDetected   = args['driftDetected']      as bool? ?? false;
+
       final items = args['agreementItems'];
       if (items is List<AgreementItem>) {
         agreementItems.assignAll(items);
       } else if (items is RxList<AgreementItem>) {
         agreementItems.assignAll(items);
+      }
+
+      final timeline = args['commitmentTimeline'];
+      if (timeline is List<CommitmentTimelineEntry>) {
+        commitmentTimeline.assignAll(timeline);
+      } else if (timeline is RxList<CommitmentTimelineEntry>) {
+        commitmentTimeline.assignAll(timeline);
       }
     }
     _saveToFirestore();
@@ -86,25 +98,26 @@ class AgreementRecordController extends GetxController {
     await Future.delayed(const Duration(seconds: 2));
     linkCopied.value = false;
   }
+
   Future<void> exportPdf() async {
-  if (isExporting.value) return;
-  try {
-    isExporting.value = true;
-    await PdfExportService().exportAgreementRecord(
-      callName: callName.value,
-      commercialTerm: commercialTerm.value,
-      resolution: resolutionStatus.value,
-      stateChange: stateChange.value,
-      earlierEvidence: earlierEvidence.value,
-      laterEvidence: laterEvidence.value,
-      missingEvidence: missingEvidence.value,
-      clarifyingQuestion: clarifyingQuestion.value,
-      agreementItems: agreementItems,
-    );
-  } finally {
-    isExporting.value = false;
+    if (isExporting.value) return;
+    try {
+      isExporting.value = true;
+      await PdfExportService().exportAgreementRecord(
+        callName: callName.value,
+        commercialTerm: commercialTerm.value,
+        resolution: resolutionStatus.value,
+        stateChange: stateChange.value,
+        earlierEvidence: earlierEvidence.value,
+        laterEvidence: laterEvidence.value,
+        missingEvidence: missingEvidence.value,
+        clarifyingQuestion: clarifyingQuestion.value,
+        agreementItems: agreementItems,
+      );
+    } finally {
+      isExporting.value = false;
+    }
   }
-}
 
   void startNewCall() => Get.offAllNamed(AppRoutes.home);
 }

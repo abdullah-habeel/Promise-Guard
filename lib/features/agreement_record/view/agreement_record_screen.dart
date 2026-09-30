@@ -4,7 +4,7 @@ import 'package:promise_guard/core/theme/app_theme.dart';
 import 'package:promise_guard/features/agreement_record/widgets/share_card.dart';
 import 'package:promise_guard/features/drift_alert/widgets/scafold.dart';
 import '../controller/agreement_record_controller.dart';
-
+import 'package:collection/collection.dart';
 class AgreementRecordScreen extends StatelessWidget {
   const AgreementRecordScreen({super.key});
 
@@ -142,18 +142,54 @@ class _DetailsCard extends StatelessWidget {
           if (controller.earlierEvidence.value.isNotEmpty) ...[
             _divider(),
             _Row(
-              label: 'EVIDENCE',
-              child: Row(
-                children: [
-                  _EvidenceBadge(id: controller.earlierEvidence.value, primary: true),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(Icons.arrow_forward_rounded, size: 14, color: AppTheme.muted),
-                  ),
-                  _EvidenceBadge(id: controller.laterEvidence.value, primary: false),
-                ],
+  label: 'EVIDENCE',
+  child: Row(
+    children: [
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _EvidenceBadge(id: controller.earlierEvidence.value, primary: true),
+          const SizedBox(height: 3),
+          Obx(() {
+            final match = controller.commitmentTimeline.firstWhereOrNull(
+              (e) => e.lineId == controller.earlierEvidence.value,
+            );
+            return Text(
+              match?.timestamp ?? '',
+              style: TextStyle(
+                fontSize: 10,
+                color: AppTheme.muted,
               ),
-            ),
+            );
+          }),
+        ],
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Icon(Icons.arrow_forward_rounded, size: 14, color: AppTheme.muted),
+      ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _EvidenceBadge(id: controller.laterEvidence.value, primary: false),
+          const SizedBox(height: 3),
+          Obx(() {
+            final match = controller.commitmentTimeline.firstWhereOrNull(
+              (e) => e.lineId == controller.laterEvidence.value,
+            );
+            return Text(
+              match?.timestamp ?? '',
+              style: TextStyle(
+                fontSize: 10,
+                color: AppTheme.muted,
+              ),
+            );
+          }),
+        ],
+      ),
+    ],
+  ),
+),
           ],
           if (!isConfirmed && controller.missingEvidence.value.isNotEmpty) ...[
             _divider(),

@@ -12,7 +12,6 @@ const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gem
 function validateGeminiResponse(parsed, validLineIds) {
   const errors = [];
 
-  // 1. Required top-level fields
   if (typeof parsed.driftDetected !== "boolean") {
     errors.push("driftDetected must be boolean");
   }
@@ -32,14 +31,12 @@ function validateGeminiResponse(parsed, validLineIds) {
     errors.push("agreementItems must be array");
   }
 
-  // 2. If drift detected, extra fields are required
   if (parsed.driftDetected) {
     if (!parsed.earlierEvidence) errors.push("earlierEvidence missing");
     if (!parsed.laterEvidence) errors.push("laterEvidence missing");
     if (!parsed.stateChange) errors.push("stateChange missing");
     if (!parsed.missingEvidence) errors.push("missingEvidence missing");
 
-    // 3. Validate evidence line IDs exist in actual transcript
     if (Array.isArray(parsed.evidence)) {
       parsed.evidence.forEach((e, i) => {
         if (!e.lineId) {
@@ -54,7 +51,6 @@ function validateGeminiResponse(parsed, validLineIds) {
       });
     }
 
-    // 4. Validate earlierEvidence and laterEvidence line IDs
     if (parsed.earlierEvidence && !validLineIds.has(parsed.earlierEvidence)) {
       errors.push(`earlierEvidence "${parsed.earlierEvidence}" not found in transcript`);
     }
@@ -82,6 +78,24 @@ function applyDefaults(parsed) {
     agreementItems: Array.isArray(parsed.agreementItems) ? parsed.agreementItems : [],
   };
 }
+
+// ── Clean no-drift response helper ─────────────────────────────────────────
+function cleanNoDriftResponse() {
+  return {
+    driftDetected: false,
+    commercialTerm: "",
+    explanation: "Analysis unavailable for this call.",
+    clarifyingQuestion: "",
+    earlierEvidence: "",
+    laterEvidence: "",
+    stateChange: "",
+    missingEvidence: "",
+    commitmentTimeline: [],
+    evidence: [],
+    agreementItems: [],
+  };
+}
+
 // ── #4 Validate same-term state-change detection ───────────────────────────
 const STATE_RANK = {
   "POSSIBILITY": 1,
@@ -94,7 +108,6 @@ const STATE_RANK = {
 function validateStateChange(safe) {
   if (!safe.driftDetected) return null;
 
-  // Find earlier and later entries in commitmentTimeline
   const earlier = safe.commitmentTimeline.find(
       (e) => e.lineId === safe.earlierEvidence,
   );
@@ -117,7 +130,7 @@ function validateStateChange(safe) {
     return `No forward drift: earlier=${earlier.state}(${earlierRank}), later=${later.state}(${laterRank})`;
   }
 
-  return null; // valid
+  return null;
 }
 
 exports.transcribeAudio = onRequest(
@@ -199,6 +212,12 @@ exports.analyzeDrift = onRequest(
           return res.status(400).json({error: "Missing transcript array"});
         }
 
+        // ── Minimum line check ─────────────────────────────────────────────
+        if (transcript.length < 3) {
+          logger.warn("Transcript too short for analysis", {length: transcript.length});
+          return res.status(200).json(cleanNoDriftResponse());
+        }
+
         // Build line IDs and transcript text
         const lineIdMap = new Map();
         const transcriptText = transcript
@@ -246,6 +265,7 @@ STRICT RULES:
 - state MUST be one of: POSSIBILITY, TENTATIVE, CONDITIONAL, APPARENT_COMMITMENT, CONFIRMED
 - Always write currency values as plain text e.g. "EUR 18,000" or "USD 5,000" — never use currency symbols like €, $, £
 - If no drift detected, return driftDetected false, empty arrays for evidence and commitmentTimeline, and empty array for agreementItems
+
 Respond ONLY with valid JSON. No markdown, no backticks, no text outside JSON.
 
 If driftDetected is false:
@@ -253,6 +273,7 @@ If driftDetected is false:
 - commitmentTimeline MUST be []
 - agreementItems MUST be []
 - earlierEvidence, laterEvidence, stateChange, missingEvidence MUST be empty strings
+
 {
   "driftDetected": <true or false>,
   "commercialTerm": "<the commercial term that drifted, empty string if none>",
@@ -293,6 +314,7 @@ If driftDetected is false:
 }
 `;
 
+        // ── First Gemini attempt ───────────────────────────────────────────
         const geminiResponse = await fetch(`${GEMINI_BASE}?key=${apiKey}`, {
           method: "POST",
           headers: {"content-type": "application/json"},
@@ -307,12 +329,36 @@ If driftDetected is false:
 
         const geminiData = await geminiResponse.json();
 
+        let rawText;
+
         if (!geminiData.candidates || geminiData.candidates.length === 0) {
-          logger.error("Gemini returned no candidates", geminiData);
-          return res.status(500).json({error: "Gemini returned no response"});
+          logger.warn("Gemini returned no candidates on first try, retrying...");
+
+          // ── Retry once ─────────────────────────────────────────────────
+          const retryResponse = await fetch(`${GEMINI_BASE}?key=${apiKey}`, {
+            method: "POST",
+            headers: {"content-type": "application/json"},
+            body: JSON.stringify({
+              contents: [{parts: [{text: prompt}]}],
+              generationConfig: {
+                temperature: 0.1,
+                responseMimeType: "application/json",
+              },
+            }),
+          });
+
+          const retryData = await retryResponse.json();
+
+          if (!retryData.candidates || retryData.candidates.length === 0) {
+            logger.error("Gemini returned no candidates after retry", retryData);
+            return res.status(200).json(cleanNoDriftResponse());
+          }
+
+          rawText = retryData.candidates[0].content.parts[0].text;
+        } else {
+          rawText = geminiData.candidates[0].content.parts[0].text;
         }
 
-        const rawText = geminiData.candidates[0].content.parts[0].text;
         const cleaned = rawText.replace(/```json|```/g, "").trim();
 
         let parsed;
@@ -320,7 +366,7 @@ If driftDetected is false:
           parsed = JSON.parse(cleaned);
         } catch (parseErr) {
           logger.error("Gemini JSON parse failed", rawText);
-          return res.status(500).json({error: "Gemini returned invalid JSON"});
+          return res.status(200).json(cleanNoDriftResponse());
         }
 
         // Apply safe defaults
@@ -330,8 +376,6 @@ If driftDetected is false:
         const validationErrors = validateGeminiResponse(safe, validLineIds);
         if (validationErrors.length > 0) {
           logger.warn("Gemini response validation warnings", validationErrors);
-          // We still return the response but log the issues
-          // Filter out evidence with invalid line IDs
           safe.evidence = safe.evidence.filter((e) => {
             if (!e.lineId || !validLineIds.has(e.lineId)) {
               logger.warn(`Removing evidence with invalid lineId: ${e.lineId}`);
@@ -340,11 +384,11 @@ If driftDetected is false:
             return true;
           });
         }
-                // Validate state-change direction
+
+        // Validate state-change direction
         const stateChangeError = validateStateChange(safe);
         if (stateChangeError) {
           logger.warn("State-change validation failed", stateChangeError);
-          // Reset drift if state change is invalid
           safe.driftDetected = false;
           safe.stateChange = "";
           safe.earlierEvidence = "";
@@ -365,6 +409,7 @@ If driftDetected is false:
       }
     },
 );
+
 exports.getStreamingToken = onRequest(
     {secrets: [ASSEMBLYAI_KEY], cors: true},
     async (req, res) => {
@@ -373,13 +418,108 @@ exports.getStreamingToken = onRequest(
         const response = await fetch(
             "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
             {
-              method: "GET",  // ← was POST
+              method: "GET",
               headers: {Authorization: apiKey},
             },
         );
         const data = await response.json();
         return res.status(200).json({token: data.token});
       } catch (err) {
+        return res.status(500).json({error: err.message});
+      }
+    },
+);
+
+exports.analyzeDriftLive = onRequest(
+    {secrets: [GEMINI_KEY], cors: true, timeoutSeconds: 30},
+    async (req, res) => {
+      try {
+        const apiKey = GEMINI_KEY.value();
+        const {lines} = req.body;
+
+        if (!lines || !Array.isArray(lines)) {
+          return res.status(400).json({error: "Missing lines array"});
+        }
+
+        const window = lines.slice(-15);
+
+        const transcriptText = window
+            .map((line, index) => `L${String(index + 1).padStart(3, "0")} | ${line}`)
+            .join("\n");
+
+        const prompt = `
+You are a commitment drift detector for B2B sales calls.
+
+COMMITMENT STATES (in order):
+1. POSSIBILITY — vague interest, "we could", "maybe"
+2. TENTATIVE — "I think", "probably", "roughly"
+3. CONDITIONAL — "if finance approves", "subject to sign-off"
+4. APPARENT_COMMITMENT — assumed without confirmation, "yeah that should work", "I'll tell the client"
+5. CONFIRMED — explicit mutual confirmation
+
+DRIFT RULE:
+Drift occurs when a commercial term moves from state 1-3 to state 4-5
+WITHOUT explicit reconfirmation between those two points.
+
+TRANSCRIPT (last ${window.length} lines):
+${transcriptText}
+
+Respond ONLY with valid JSON. No markdown, no backticks.
+{
+  "driftDetected": <true or false>,
+  "commercialTerm": "<the term that drifted, empty string if none>",
+  "stateLabel": "<e.g. TENTATIVE → APPARENT_COMMITMENT, empty string if none>",
+  "matchedLine": "<the exact line that triggered drift, empty string if none>"
+}
+`;
+
+        const geminiResponse = await fetch(`${GEMINI_BASE}?key=${apiKey}`, {
+          method: "POST",
+          headers: {"content-type": "application/json"},
+          body: JSON.stringify({
+            contents: [{parts: [{text: prompt}]}],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: "application/json",
+            },
+          }),
+        });
+
+        const geminiData = await geminiResponse.json();
+
+        if (!geminiData.candidates || geminiData.candidates.length === 0) {
+          // Silent fail — never crash the live call
+          return res.status(200).json({
+            driftDetected: false,
+            commercialTerm: "",
+            stateLabel: "",
+            matchedLine: "",
+          });
+        }
+
+        const rawText = geminiData.candidates[0].content.parts[0].text;
+        const cleaned = rawText.replace(/```json|```/g, "").trim();
+
+        let parsed;
+        try {
+          parsed = JSON.parse(cleaned);
+        } catch (e) {
+          return res.status(200).json({
+            driftDetected: false,
+            commercialTerm: "",
+            stateLabel: "",
+            matchedLine: "",
+          });
+        }
+
+        return res.status(200).json({
+          driftDetected: parsed.driftDetected ?? false,
+          commercialTerm: parsed.commercialTerm ?? "",
+          stateLabel: parsed.stateLabel ?? "",
+          matchedLine: parsed.matchedLine ?? "",
+        });
+      } catch (err) {
+        logger.error("analyzeDriftLive error", err);
         return res.status(500).json({error: err.message});
       }
     },
